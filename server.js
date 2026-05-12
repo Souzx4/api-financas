@@ -4,6 +4,7 @@ const cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const pool = require('./db');
+const req = require('express/lib/request');
 
 const app = express();
 
@@ -152,8 +153,72 @@ app.put('/emprestimos/:id/quitar', verificarToken, async (req, res) => {
 // ROTA 6: ADICIONAR UMA NOVA TRANSAÇÃO (POST)
 // ==========================================
 app.post('/transacoes', verificarToken, async (req, res) => {
-    
-})
+    const { tipo, valor, categoria, descricao, data_transacao, origem} = req.body;
+    const usuario_id = req.usuario.id;
+
+    try {
+        const [resultado] = await pool.query(
+            `insert into transacoes (usuario_id, tipo, valor, categoria, descricao, data_transacao, origem) values (?, ?, ?, ?, ?, ?, ?)`, [usuario_id, tipo, valor, categoria, descricao, data_transacao, origem]
+        );
+        res.status(201).json({ mensagem: 'Transação registrada com sucesso!', id: resultado.insertId });
+    } catch (erro){
+        console.error(erro);
+        res.status(500).json({ erro: 'Erro ao salvar a transação.' })
+    }
+});
+
+// ==========================================
+// ROTA 7: LISTAR TODAS AS TRANSAÇÕES (GET)
+// ==========================================
+app.get('/transacoes', verificarToken,async (req, res) => {
+    const usuario_id = req.usuario.id;
+
+    try {
+        // busca os gastos e ganhos ordenados do mais recente
+        const [transacoes] = await pool.query(
+            'select * from transacoes where usuario_id = ? order by data_transacao desc', [usuario_id]
+        );
+        res.json(transacoes);
+    } catch (erro){
+        console.error(erro);
+        res.status(500).json({ erro: 'Erro ao buscar as transações.'})
+    }
+});
+
+// ==========================================
+// ROTA 8: RESUMO FINANCEIRO (DASHBOARD)
+// ==========================================
+app.get('/resumo', verificarToken, async (req, res) =>{
+    const usuario_id = req.usuario.id;
+
+    try {
+        //soma todas as entradas (receitas)
+        const [receitas] = await pool.query (
+            'select sum(valor) as total_receitas from transacoes where usuario_id = ? and tipo = "receita"', [usuario_id]
+        );
+
+        // soma toas as saidas (despesas)
+        const [despesas] = await pool.query (
+            'select sum(valor) as total_despesas from transacoes where usuario_id = ? and tipo = "despesa"', [usuario_id]
+        );
+
+        // se não tiver nada, garante que o valor é 0
+        const totalReceitas = receitas[0].total_receitas || 0;
+        const totalDespesas = despesas[0].total_despesas || 0;
+
+        // calcula o saldo
+        const saldoCaixa = totalReceitas - totalDespesas;
+
+        res.json({
+            receitas: parseFloat(totalReceitas).toFixed(2),
+            despesas: parseFloat(totalDespesas).toFixed(2),
+            saldo: parseFloat(saldoCaixa).toFixed(2)
+        });
+    } catch (erro){
+        console.error(erro);
+        res.status(500).json({ erro: 'Erro ao gerar o resumo.'});
+    }
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
