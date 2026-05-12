@@ -125,6 +125,36 @@ app.get('/emprestimos', verificarToken, async (req, res) => {
     }
 });
 
+// ==========================================
+// ROTA 5: QUITAR / FINALIZAR UM EMPRÉSTIMO (PUT)
+// ==========================================
+app.put('/emprestimos/:id/quitar', verificarToken, async (req, res) => {
+    const emprestimo_id = req.params.id;
+    const usuario_id = req.usuario.id;
+
+    try {
+        const [resultado] = await pool.query(
+            'update emprestimos set status = "finalizado" where id = ? and usuario_id = ?', [emprestimo_id, usuario_id]
+        );
+
+        // verifica se ele tentou alterar algo que não existe ou não é dele
+        if (resultado.affectedRows === 0) {
+            return res.status(404).json({ erro: 'Empréstimo não encontrado ou você não tem permissão.' });
+        }
+        res.json({ mensagem: 'Dinheiro na conta! Empréstimo quitado com sucesso.' });
+    } catch (erro) {
+        console.error(erro);
+        res.status(500).json({ erro: 'Erro ao tentar finalizar o empréstimo.' });
+    }
+});
+
+// ==========================================
+// ROTA 6: ADICIONAR UMA NOVA TRANSAÇÃO (POST)
+// ==========================================
+app.post('/transacoes', verificarToken, async (req, res) => {
+    
+})
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`🚀 Servidor rodando na porta ${PORT}`);
